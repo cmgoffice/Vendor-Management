@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+const origin='http://127.0.0.1:8787';
+const admin='local_seedy',a='qa_vendor_a',b='qa_vendor_b';
+let passed=0;
+async function call(user,payload,expected=200,customOrigin=origin){const r=await fetch(origin+'/api/workspace',{method:payload?'POST':'GET',headers:{Connection:'close',...(user?{'oai-authenticated-user-id':user,'oai-authenticated-user-email':user+'@example.com'}:{}),...(payload?{'Content-Type':'application/json',Origin:customOrigin}:{})},body:payload?JSON.stringify(payload):undefined});const raw=await r.text();if(!raw.startsWith('{') && !raw.startsWith('['))throw new Error(JSON.stringify({step:passed+1,action:payload?.action,status:r.status,body:raw}));const body=JSON.parse(raw);assert.equal(r.status,expected,JSON.stringify(body));passed++;return body;}
+const company=name=>({name,category:'Technology',contact:'Test contact',email:'vendor@example.com',phone:'+66 20000000',website:'https://example.com',taxId:'',address:'Bangkok',description:'Local test record'});
+await call(null,null,401);
+await call(admin,{action:'setup',data:{name:'Alex Morgan',workspaceName:'Vendor workspace'}});
+const recovered=await call(admin,{action:'setup',data:{name:'Alex Morgan',workspaceName:'Vendor workspace'}});assert.equal(recovered.profile.role,'admin');
+const sa=await call(a,{action:'register',data:{name:'Vendor A',company:company('QA Company A')}});
+const va=sa.vendors[0].id;assert.equal(sa.vendors.length,1);assert.equal(sa.profile.role,'vendor');
+const sb=await call(b,{action:'register',data:{name:'Vendor B',company:company('QA Company B')}});const vb=sb.vendors[0].id;
+await call('qa_intruder',{action:'setup',data:{name:'Intruder',workspaceName:'Wrong'}},409);
+const replay=await call(a,{action:'register',data:{name:'Vendor A',company:company('QA Company A')}});assert.equal(replay.vendors.length,1);
+await call(a,{action:'saveVendor',id:vb,data:company('Not allowed')},403);
+await call(a,{action:'saveVendor',data:company('Not allowed')},403);
+await call(a,{action:'status',id:va,status:'Active'},403);
+await call(a,{action:'saveVendor',id:va,data:{...company('QA Company A'),role:'admin'}},400);
+await call(a,{action:'saveVendor',id:va,data:company('Saved company A')});
+
+const add={action:'saveVendor',createId:randomUUID(),data:company('QA Manual vendor')};await call(admin,add);const dedup=await call(admin,add);assert.equal(dedup.vendors.filter(v=>v.id===add.createId).length,1);
+await call(admin,{...add,data:company('Different details')},409);
+const evaluation={id:randomUUID(),vendorId:va,quality:5,price:4,delivery:3,service:4,reliability:5,comment:'Verified local evaluation'};
+await call(a,{action:'review',data:evaluation},403);
+await call(admin,{action:'review',data:{...evaluation,quality:0}},400);
+await call(admin,{action:'review',data:{...evaluation,quality:2.5}},400);
+await call(admin,{action:'review',data:{...evaluation,quality:'5'}},400);
+await call(admin,{action:'review',data:{...evaluation,quality:undefined}},400);
+await call(admin,{action:'review',data:{...evaluation,vendorId:'does-not-exist'}},404);
+await call(admin,{action:'review',data:evaluation});
+const duplicate=await call(admin,{action:'review',data:evaluation});assert.equal(duplicate.reviews.filter(r=>r.id===evaluation.id).length,1);
+await call(admin,{action:'review',data:{...evaluation,comment:'Conflicting retry'}},409);
+await call(admin,{action:'status',id:va,status:'Active'});
+const persisted=await call(a);assert.equal(persisted.vendors.length,1);assert.equal(persisted.vendors[0].name,'Saved company A');assert.equal(persisted.vendors[0].status,'Active');assert.equal(persisted.vendors[0].score,4.2);assert.equal(persisted.reviews.length,1);
+const isolated=await call(b);assert.equal(isolated.vendors.length,1);assert.equal(isolated.vendors[0].id,vb);assert.equal(isolated.reviews.length,0);
+await call(a,{action:'saveVendor',id:va,data:company('Cross-origin')},403,'https://untrusted.example');
+console.log(JSON.stringify({passed,checks:['authentication','admin bootstrap','self-registration','vendor isolation','role and status permissions','input validation','CSRF','persistent edits','five-dimension average','idempotent creation and reviews']}));

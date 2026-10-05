@@ -1,0 +1,6 @@
+import {z} from 'zod';
+import {categories} from './data';
+export const vendorInput=z.object({name:z.string().trim().min(2,'Company name must have at least 2 characters.').max(120),category:z.string().refine(x=>categories.includes(x),'Choose a category.'),contact:z.string().trim().min(2,'Enter a contact name.').max(100),email:z.string().trim().email('Enter a valid email.').max(160),phone:z.string().trim().min(5,'Enter a phone number.').max(40),website:z.string().trim().max(250).refine(x=>!x||/^https?:\/\//.test(x),'Use a website beginning with https://.').refine(x=>{try{return !x||Boolean(new URL(x).hostname)}catch{return false}},'Enter a valid website.'),taxId:z.string().trim().max(40),address:z.string().trim().max(500),description:z.string().trim().max(1000)}).strict();
+export const registrationInput=z.object({name:z.string().trim().min(2).max(100),company:vendorInput}).strict();
+export const setupInput=z.object({name:z.string().trim().min(2).max(100),workspaceName:z.string().trim().min(2).max(120)}).strict();
+export const reviewInput=z.object({id:z.string().uuid(),vendorId:z.string().min(1).max(80),quality:z.number().int().min(1).max(5),price:z.number().int().min(1).max(5),delivery:z.number().int().min(1).max(5),service:z.number().int().min(1).max(5),reliability:z.number().int().min(1).max(5),comment:z.string().trim().max(1500)}).strict();
