@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vendorly · Vendor Management",
-  description: "Register your company, manage vendor profiles and evaluate partner performance.",
+  title: "CMG Vendor Management",
+  description: "Manage vendor profiles and evaluate partner performance with CMG Vendor Management.",
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
